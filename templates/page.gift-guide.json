@@ -1,0 +1,104 @@
+{
+  "sections": {
+    "banner": {
+      "type": "banner",
+      "settings": {
+        "heading": "The Gift Guide",
+        "subheading": "Discover Joy: Your Ultimate Holiday Gift Destination. Explore our curated selection and find the perfect gifts to delight your loved ones this holiday season.",
+        "button_label": "Shop now",
+        "button_link": "/collections/all",
+        "open_in_new_tab": false,
+        "footer_text": "Sustainable, ethically made clothes in sizes XXS to 6XL",
+        "overlay_opacity": 55,
+        "background_color": "#15140f",
+        "text_color": "#faf7f0",
+        "accent_color": "#f0b800",
+        "heading_font": "heading",
+        "button_style": "solid",
+        "content_alignment": "center",
+        "padding_block_start": 0,
+        "padding_block_end": 0
+      },
+      "blocks": {}
+    },
+    "product-grid": {
+      "type": "product-grid",
+      "blocks": {
+        "product_1": {
+          "type": "product",
+          "name": "Product",
+          "settings": {
+            "product": "yellow-wool-jumper",
+            "hotspot_position": "bottom-right"
+          },
+          "blocks": {}
+        },
+        "product_2": {
+          "type": "product",
+          "name": "Product",
+          "settings": {
+            "product": "classic-leather-jacket",
+            "hotspot_position": "bottom-right"
+          },
+          "blocks": {}
+        },
+        "product_3": {
+          "type": "product",
+          "name": "Product",
+          "settings": {
+            "product": "dark-winter-jacket",
+            "hotspot_position": "bottom-right"
+          },
+          "blocks": {}
+        },
+        "product_4": {
+          "type": "product",
+          "name": "Product",
+          "settings": {
+            "product": "ocean-blue-shirt",
+            "hotspot_position": "bottom-right"
+          },
+          "blocks": {}
+        },
+        "product_5": {
+          "type": "product",
+          "name": "Product",
+          "settings": {
+            "product": "red-sports-tee",
+            "hotspot_position": "bottom-right"
+          },
+          "blocks": {}
+        },
+        "product_6": {
+          "type": "product",
+          "name": "Product",
+          "settings": {
+            "product": "striped-silk-blouse",
+            "hotspot_position": "bottom-right"
+          },
+          "blocks": {}
+        }
+      },
+      "block_order": ["product_1", "product_2", "product_3", "product_4", "product_5", "product_6"],
+      "settings": {
+        "heading": "Tisso vison in the wild",
+        "subheading": "Shop the look with pieces our community has been loving this season.",
+        "text_alignment": "center",
+        "columns": 3,
+        "columns_gap": 28,
+        "image_ratio": "3 / 4",
+        "show_popup": true,
+        "hotspot_color": "#f0b800",
+        "hotspot_size": 44,
+        "free_gift_product": "dark-winter-jacket",
+        "free_gift_color": "Black",
+        "free_gift_size": "M",
+        "background_color": "#faf7f0",
+        "text_color": "#121212",
+        "padding_block_start": 72,
+        "padding_block_end": 80
+      }
+    }
+  },
+  "order": ["banner", "product-grid"]
+}

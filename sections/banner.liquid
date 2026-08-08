@@ -1,0 +1,575 @@
+{%- comment -%}
+  ============================================================================
+  SECTION: Banner ("The Gift Guide")
+  ============================================================================
+  Built from scratch for the Ecomexperts coding exercise.
+
+  Requirements implemented:
+  - Every piece of text (heading, subheading, button label, footer strip)
+    is editable from the theme customizer.
+  - The call-to-action button has animations (hover arrow-slide + lift,
+    repeating pulse ring, scroll-reveal entrance handled in banner.js).
+  - Responsive: content is re-aligned and sized down on mobile.
+  - No ready-made Dawn/Horizon components are used; markup, styles and
+    behaviour are written from scratch here (vanilla JS only, no jQuery).
+
+  All colours used by the section are exposed as CSS custom properties so
+  they stay easy to override from the customizer.
+  ============================================================================
+{%- endcomment -%}
+
+{%- liquid
+  assign section_id = 'Banner-' | append: section.id
+  assign heading = section.settings.heading
+  assign subheading = section.settings.subheading
+  assign button_label = section.settings.button_label
+  assign button_link = section.settings.button_link
+  assign footer_text = section.settings.footer_text
+  assign has_media = section.settings.image != blank
+
+  # Font stack helpers (map the customizer select to a CSS variable)
+  case section.settings.heading_font
+    when 'heading'
+      assign heading_family = 'var(--font-heading--family)'
+    when 'accent'
+      assign heading_family = 'var(--font-accent--family)'
+    else
+      assign heading_family = 'var(--font-body--family)'
+  endcase
+
+  case section.settings.button_style
+    when 'solid'
+      assign button_class = 'gift-banner__button--solid'
+    when 'outline'
+      assign button_class = 'gift-banner__button--outline'
+    else
+      assign button_class = 'gift-banner__button--solid'
+  endcase
+
+  # LCP hint for the first section on the page
+  assign fetch_priority = 'auto'
+  if section.index == 1
+    assign fetch_priority = 'high'
+  endif
+-%}
+
+<div
+  id="{{ section_id }}"
+  class="gift-banner gift-banner--align-{{ section.settings.content_alignment }}"
+  style="
+    --banner-bg: {{ section.settings.background_color }};
+    --banner-text: {{ section.settings.text_color }};
+    --banner-accent: {{ section.settings.accent_color }};
+    --banner-overlay: {{ section.settings.overlay_opacity | divided_by: 100.0 }};
+    --banner-heading-family: {{ heading_family }};
+    --banner-padding-block-start: {{ section.settings.padding_block_start }}px;
+    --banner-padding-block-end: {{ section.settings.padding_block_end }}px;
+  "
+>
+  {%- if has_media -%}
+    <div class="gift-banner__media" aria-hidden="true">
+      {{
+        section.settings.image
+        | image_url: width: 2400
+        | image_tag:
+          width: section.settings.image.width,
+          widths: '750, 1100, 1500, 1780, 2000, 2400',
+          sizes: '100vw',
+          alt: section.settings.image.alt | escape,
+          class: 'gift-banner__image',
+          fetchpriority: fetch_priority
+      }}
+      <div class="gift-banner__overlay"></div>
+    </div>
+  {%- endif -%}
+
+  <div class="gift-banner__content">
+    {%- if heading != blank -%}
+      <h1 class="gift-banner__heading" data-reveal>{{ heading }}</h1>
+    {%- endif -%}
+
+    {%- if subheading != blank -%}
+      <div class="gift-banner__subheading" data-reveal>{{ subheading }}</div>
+    {%- endif -%}
+
+    {%- if button_label != blank -%}
+      <div class="gift-banner__actions" data-reveal>
+        <a
+          class="gift-banner__button {{ button_class }}"
+          href="{{ button_link | default: '#' }}"
+          {% if section.settings.open_in_new_tab %}
+            target="_blank"
+            rel="noopener"
+          {% endif %}
+          aria-label="{{ button_label | escape }}"
+        >
+          <span class="gift-banner__button-label">{{ button_label }}</span>
+          <span class="gift-banner__button-arrow" aria-hidden="true">
+            {{- 'icon-arrow.svg' | inline_asset_content -}}
+          </span>
+          <span class="gift-banner__button-ring" aria-hidden="true"></span>
+        </a>
+      </div>
+    {%- endif -%}
+  </div>
+
+  {%- if footer_text != blank -%}
+    <div class="gift-banner__footer" data-reveal>
+      <span class="gift-banner__footer-text">{{ footer_text }}</span>
+    </div>
+  {%- endif -%}
+</div>
+
+<script src="{{ 'banner.js' | asset_url }}" defer></script>
+
+{% stylesheet %}
+  .gift-banner {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: stretch;
+    min-height: 560px;
+    padding-block: var(--banner-padding-block-start) var(--banner-padding-block-end);
+    background-color: var(--banner-bg);
+    color: var(--banner-text);
+    overflow: hidden;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Media (illustration/photo background)                              */
+  /* ------------------------------------------------------------------ */
+  .gift-banner__media {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+  }
+
+  .gift-banner__image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+  }
+
+  .gift-banner__overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to bottom,
+      rgb(0 0 0 / calc(var(--banner-overlay) * 0.6)),
+      rgb(0 0 0 / var(--banner-overlay))
+    );
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Content                                                            */
+  /* ------------------------------------------------------------------ */
+  .gift-banner__content {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 1200px;
+    margin-inline: auto;
+    padding-inline: 24px;
+    padding-block: 48px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .gift-banner--align-center .gift-banner__content {
+    align-items: center;
+    text-align: center;
+  }
+
+  .gift-banner--align-right .gift-banner__content {
+    align-items: flex-end;
+    text-align: right;
+  }
+
+  .gift-banner__heading {
+    margin: 0;
+    font-family: var(--banner-heading-family);
+    font-size: clamp(2.5rem, 6vw, 5.25rem);
+    font-weight: 400;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    color: var(--banner-text);
+    max-width: 14ch;
+  }
+
+  .gift-banner--align-center .gift-banner__heading {
+    margin-inline: auto;
+  }
+
+  .gift-banner__subheading {
+    max-width: 46ch;
+    font-size: clamp(1rem, 1.6vw, 1.2rem);
+    line-height: 1.6;
+    opacity: 0.85;
+    color: var(--banner-text);
+  }
+
+  .gift-banner--align-center .gift-banner__subheading {
+    margin-inline: auto;
+  }
+
+  .gift-banner__actions {
+    margin-block-start: 8px;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Animated call-to-action button                                     */
+  /* ------------------------------------------------------------------ */
+  .gift-banner__button {
+    --button-bg: var(--banner-accent);
+    --button-fg: #121212;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 28px;
+    border-radius: 999px;
+    font-family: var(--font-body--family);
+    font-size: 0.95rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: var(--button-fg);
+    background-color: var(--button-bg);
+    border: 1px solid transparent;
+    transition:
+      transform 0.25s ease,
+      box-shadow 0.25s ease,
+      background-color 0.25s ease;
+    cursor: pointer;
+  }
+
+  .gift-banner__button--outline {
+    background-color: transparent;
+    color: var(--banner-text);
+    border-color: rgb(255 255 255 / 0.6);
+  }
+
+  /* Hover: lift + arrow slides right */
+  .gift-banner__button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 28px rgb(0 0 0 / 0.35);
+  }
+
+  .gift-banner__button-arrow {
+    display: inline-flex;
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .gift-banner__button:hover .gift-banner__button-arrow,
+  .gift-banner__button:focus-visible .gift-banner__button-arrow {
+    transform: translateX(6px);
+  }
+
+  .gift-banner__button-arrow svg {
+    width: 18px;
+    height: 18px;
+    display: block;
+  }
+
+  /* Repeating pulse ring behind the button */
+  .gift-banner__button-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    border: 1px solid var(--button-bg);
+    opacity: 0;
+    pointer-events: none;
+    animation: gift-banner-pulse 2.6s ease-out infinite;
+  }
+
+  @keyframes gift-banner-pulse {
+    0% {
+      transform: scale(1);
+      opacity: 0.7;
+    }
+    70% {
+      transform: scale(1.35);
+      opacity: 0;
+    }
+    100% {
+      transform: scale(1.35);
+      opacity: 0;
+    }
+  }
+
+  .gift-banner__button--outline .gift-banner__button-ring {
+    border-color: rgb(255 255 255 / 0.6);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Footer strip                                                       */
+  /* ------------------------------------------------------------------ */
+  .gift-banner__footer {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    border-top: 1px solid rgb(255 255 255 / 0.25);
+    padding: 18px 24px;
+    text-align: center;
+  }
+
+  .gift-banner__footer-text {
+    font-family: var(--font-body--family);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    opacity: 0.85;
+    color: var(--banner-text);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Scroll-reveal entrance (banner.js adds the class)                  */
+  /* ------------------------------------------------------------------ */
+  .gift-banner--animate [data-reveal] {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+
+  .gift-banner--animate [data-reveal].is-visible {
+    opacity: 1;
+    transform: translateY(0);
+    transition:
+      opacity 0.7s ease,
+      transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .gift-banner--animate [data-reveal]:nth-child(2) {
+    transition-delay: 0.08s;
+  }
+
+  .gift-banner--animate [data-reveal]:nth-child(3) {
+    transition-delay: 0.16s;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Mobile                                                             */
+  /* ------------------------------------------------------------------ */
+  @media screen and (max-width: 749px) {
+    .gift-banner {
+      min-height: 460px;
+    }
+
+    .gift-banner__content {
+      padding-inline: 20px;
+      padding-block: 40px 24px;
+      gap: 16px;
+    }
+
+    .gift-banner__heading {
+      font-size: clamp(2.2rem, 11vw, 3.25rem);
+    }
+
+    .gift-banner__button {
+      padding: 12px 22px;
+      font-size: 0.85rem;
+    }
+
+    .gift-banner__footer {
+      padding: 14px 20px;
+    }
+
+    .gift-banner__footer-text {
+      font-size: 0.6rem;
+      letter-spacing: 0.14em;
+    }
+  }
+
+  /* Respect reduced-motion preferences */
+  @media (prefers-reduced-motion: reduce) {
+    .gift-banner__button-ring {
+      animation: none;
+    }
+
+    .gift-banner--animate [data-reveal] {
+      opacity: 1;
+      transform: none;
+    }
+  }
+{% endstylesheet %}
+
+{% schema %}
+{
+  "name": "Banner",
+  "tag": "section",
+  "class": "gift-banner-wrapper section-wrapper",
+  "disabled_on": {
+    "groups": ["header", "footer"]
+  },
+  "settings": [
+    {
+      "type": "header",
+      "content": "Text"
+    },
+    {
+      "type": "textarea",
+      "id": "heading",
+      "label": "Heading",
+      "default": "The Gift Guide"
+    },
+    {
+      "type": "textarea",
+      "id": "subheading",
+      "label": "Subheading",
+      "default": "Discover Joy: Your Ultimate Holiday Gift Destination. Explore our curated selection and find the perfect gifts to delight your loved ones this holiday season."
+    },
+    {
+      "type": "text",
+      "id": "button_label",
+      "label": "Button label",
+      "default": "Shop now"
+    },
+    {
+      "type": "url",
+      "id": "button_link",
+      "label": "Button link",
+      "default": "/collections/all"
+    },
+    {
+      "type": "checkbox",
+      "id": "open_in_new_tab",
+      "label": "Open link in new tab",
+      "default": false
+    },
+    {
+      "type": "textarea",
+      "id": "footer_text",
+      "label": "Footer strip text",
+      "default": "Sustainable, ethically made clothes in sizes XXS to 6XL"
+    },
+    {
+      "type": "header",
+      "content": "Style"
+    },
+    {
+      "type": "image_picker",
+      "id": "image",
+      "label": "Background image",
+      "info": "Recommended: a line-art illustration or lifestyle photo."
+    },
+    {
+      "type": "range",
+      "id": "overlay_opacity",
+      "label": "Overlay opacity",
+      "min": 0,
+      "max": 100,
+      "step": 5,
+      "unit": "%",
+      "default": 60
+    },
+    {
+      "type": "color",
+      "id": "background_color",
+      "label": "Background color",
+      "default": "#15140f"
+    },
+    {
+      "type": "color",
+      "id": "text_color",
+      "label": "Text color",
+      "default": "#faf7f0"
+    },
+    {
+      "type": "color",
+      "id": "accent_color",
+      "label": "Button accent color",
+      "default": "#f0b800"
+    },
+    {
+      "type": "select",
+      "id": "heading_font",
+      "label": "Heading font",
+      "options": [
+        {
+          "value": "heading",
+          "label": "Heading"
+        },
+        {
+          "value": "accent",
+          "label": "Accent"
+        },
+        {
+          "value": "body",
+          "label": "Body"
+        }
+      ],
+      "default": "heading"
+    },
+    {
+      "type": "select",
+      "id": "button_style",
+      "label": "Button style",
+      "options": [
+        {
+          "value": "solid",
+          "label": "Solid"
+        },
+        {
+          "value": "outline",
+          "label": "Outline"
+        }
+      ],
+      "default": "solid"
+    },
+    {
+      "type": "select",
+      "id": "content_alignment",
+      "label": "Content alignment",
+      "options": [
+        {
+          "value": "left",
+          "label": "Left"
+        },
+        {
+          "value": "center",
+          "label": "Center"
+        },
+        {
+          "value": "right",
+          "label": "Right"
+        }
+      ],
+      "default": "left"
+    },
+    {
+      "type": "header",
+      "content": "Spacing"
+    },
+    {
+      "type": "range",
+      "id": "padding_block_start",
+      "label": "Top padding",
+      "min": 0,
+      "max": 120,
+      "step": 4,
+      "unit": "px",
+      "default": 0
+    },
+    {
+      "type": "range",
+      "id": "padding_block_end",
+      "label": "Bottom padding",
+      "min": 0,
+      "max": 120,
+      "step": 4,
+      "unit": "px",
+      "default": 0
+    }
+  ],
+  "presets": [
+    {
+      "name": "Banner",
+      "category": "Banner"
+    }
+  ]
+}
+{% endschema %}
