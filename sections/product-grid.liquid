@@ -1,0 +1,1033 @@
+{%- comment -%}
+  ============================================================================
+  SECTION: Product Grid ("Tisso vison in the wild")
+  ============================================================================
+  Built from scratch for the Ecomexperts coding exercise.
+
+  Requirements implemented:
+  - The grid shows up to six blocks, each for ONE product, and every product
+    is selectable from the theme customizer (product picker per block).
+  - Each card exposes a "+" hotspot button that opens a quick-view popup.
+  - The popup renders the product name, price, description and ALL variant
+    options dynamically from the product's own data (see the JSON embedded
+    next to each card - nothing is hardcoded).
+  - "Add to cart" posts to the Shopify AJAX cart API (vanilla JS only) and
+    re-opens/updates the theme's cart drawer via the standard
+    `shopify:cart:lines-update` event.
+  - Auto-add rule: when a product whose selected variant matches the
+    configured free-gift trigger (default Color "Black" + Size "M"/Medium)
+    is added to the cart, the configured free-gift product (default
+    "Soft Winter Jacket") is added to the cart in the same request.
+  - Fully responsive: the grid collapses to two columns on mobile and the
+    popup stacks image-over-details.
+  ============================================================================
+{%- endcomment -%}
+
+{%- liquid
+  assign section_id = 'Grid-' | append: section.id
+
+  # ------------------------------------------------------------------
+  # Free-gift auto-add rule configuration (editable from customizer)
+  # ------------------------------------------------------------------
+  assign free_gift = all_products[section.settings.free_gift_product]
+  assign free_gift_variant = free_gift.selected_or_first_available_variant
+
+  assign hotspot_position = 'gift-grid__hotspot--' | append: section.settings.hotspot_position
+  assign section_text_align = 'gift-grid--align-' | append: section.settings.text_alignment
+-%}
+
+<div
+  id="{{ section_id }}"
+  class="gift-grid {{ section_text_align }}"
+  data-gift-grid
+  data-free-gift-variant="{{ free_gift_variant.id | default: '' }}"
+  data-free-gift-title="{{ free_gift.title | default: '' | escape }}"
+  data-free-gift-handle="{{ free_gift.handle | default: '' }}"
+  data-free-gift-color="{{ section.settings.free_gift_color | escape }}"
+  data-free-gift-size="{{ section.settings.free_gift_size | escape }}"
+  style="
+    --grid-cols: {{ section.settings.columns }};
+    --grid-gap: {{ section.settings.columns_gap }}px;
+    --grid-bg: {{ section.settings.background_color }};
+    --grid-text: {{ section.settings.text_color }};
+    --grid-accent: {{ section.settings.hotspot_color }};
+    --grid-hotspot-size: {{ section.settings.hotspot_size }}px;
+    --grid-padding-block-start: {{ section.settings.padding_block_start }}px;
+    --grid-padding-block-end: {{ section.settings.padding_block_end }}px;
+    --grid-image-ratio: {{ section.settings.image_ratio }};
+  "
+>
+  <div class="gift-grid__inner">
+    <div class="gift-grid__header">
+      {%- if section.settings.heading != blank -%}
+        <h2 class="gift-grid__heading">{{ section.settings.heading }}</h2>
+      {%- endif -%}
+      {%- if section.settings.subheading != blank -%}
+        <p class="gift-grid__subheading">{{ section.settings.subheading }}</p>
+      {%- endif -%}
+    </div>
+
+    {%- if section.blocks.size > 0 -%}
+      <div class="gift-grid__cards">
+        {%- for block in section.blocks -%}
+          {%- liquid
+            assign product = block.settings.product
+            assign product_image = block.settings.image | default: product.featured_image
+          -%}
+
+          <div class="gift-grid__card" data-product-card>
+            <div class="gift-grid__media">
+              {%- if product_image != blank -%}
+                {{
+                  product_image
+                  | image_url: width: 1200
+                  | image_tag:
+                    width: product_image.width,
+                    widths: '360, 540, 720, 900, 1080, 1200',
+                    sizes: '(min-width: 990px) 33vw, (min-width: 750px) 50vw, 50vw',
+                    alt: product_image.alt | default: product.title | escape,
+                    loading: 'lazy',
+                    class: 'gift-grid__image'
+                }}
+              {%- elsif product.featured_media != blank -%}
+                {{ product.featured_media | image_tag: class: 'gift-grid__image', loading: 'lazy' }}
+              {%- else -%}
+                {{ 'product-1' | placeholder_svg_tag: 'gift-grid__image gift-grid__image--placeholder' }}
+              {%- endif -%}
+
+              {%- if section.settings.show_popup and product != blank -%}
+                <button
+                  type="button"
+                  class="gift-grid__hotspot {{ hotspot_position }}"
+                  data-open-popup
+                  aria-label="Quick view {{ product.title | escape }}"
+                  aria-haspopup="dialog"
+                >
+                  <span class="gift-grid__hotspot-icon" aria-hidden="true">+</span>
+                  <span class="gift-grid__hotspot-ring" aria-hidden="true"></span>
+                </button>
+              {%- endif -%}
+            </div>
+
+            <div class="gift-grid__info">
+              <h3 class="gift-grid__title">{{ product.title | default: 'Select a product' }}</h3>
+              {%- if product != blank -%}
+                <span class="gift-grid__price">{{ product.price | money }}</span>
+              {%- endif -%}
+            </div>
+
+            {%- if product != blank -%}
+              {%- capture product_data -%}
+                {
+                  "id": {{ product.id | json }},
+                  "title": {{ product.title | json }},
+                  "handle": {{ product.handle | json }},
+                  "url": {{ product.url | json }},
+                  "featured_image": {{ product_image | image_url: width: 1000 | json }},
+                  "featured_image_alt": {{ product_image.alt | default: product.title | json }},
+                  "price": {{ product.price | money | json }},
+                  "compare_at_price": {% if product.compare_at_price %}{{ product.compare_at_price | money | json }}{% else %}null{% endif %},
+                  "description": {{ product.description | strip_html | json }},
+                  "options": [
+                    {%- for option in product.options_with_values -%}
+                      {
+                        "name": {{ option.name | json }},
+                        "values": {{ option.values | json }}
+                      }{%- unless forloop.last -%},{%- endunless -%}
+                    {%- endfor -%}
+                  ],
+                  "variants": [
+                    {%- for variant in product.variants -%}
+                      {
+                        "id": {{ variant.id | json }},
+                        "title": {{ variant.title | json }},
+                        "option1": {{ variant.option1 | json }},
+                        "option2": {{ variant.option2 | json }},
+                        "option3": {{ variant.option3 | json }},
+                        "available": {{ variant.available | json }},
+                        "price": {{ variant.price | money | json }},
+                        "compare_at_price": {% if variant.compare_at_price %}{{ variant.compare_at_price | money | json }}{% else %}null{% endif %},
+                        "image": {{ variant.featured_image | default: product_image | image_url: width: 1000 | json }}
+                      }{%- unless forloop.last -%},{%- endunless -%}
+                    {%- endfor -%}
+                  ]
+                }
+              {%- endcapture -%}
+              <script type="application/json" data-product-json>{{ product_data }}</script>
+            {%- endif -%}
+          </div>
+        {%- endfor -%}
+      </div>
+    {%- else -%}
+      <p class="gift-grid__empty">Add up to six products in the theme customizer.</p>
+    {%- endif -%}
+  </div>
+
+  {%- comment -%}
+    Single quick-view popup shell. product-grid.js fills it with the data
+    embedded next to each product card. Native <dialog> + showModal() gives
+    us focus trapping, Escape-to-close and scroll locking for free.
+  {%- endcomment -%}
+  {%- if section.settings.show_popup -%}
+    <dialog class="gift-popup" data-popup aria-labelledby="gift-popup-title-{{ section.id }}">
+      <div class="gift-popup__card">
+        <button type="button" class="gift-popup__close" data-popup-close aria-label="Close">
+          <span aria-hidden="true">&#10005;</span>
+        </button>
+
+        <div class="gift-popup__media">
+          <img
+            class="gift-popup__image"
+            data-popup-image
+            alt=""
+            width="1000"
+            height="1250"
+            loading="lazy"
+            hidden
+          >
+        </div>
+
+        <div class="gift-popup__details">
+          <h2 class="gift-popup__title" id="gift-popup-title-{{ section.id }}" data-popup-title></h2>
+          <div class="gift-popup__price" data-popup-price></div>
+          <div class="gift-popup__description" data-popup-description></div>
+
+          <form class="gift-popup__form" data-popup-form novalidate>
+            <div class="gift-popup__options" data-popup-options></div>
+
+            <button type="submit" class="gift-popup__add" data-popup-add>
+              <span class="gift-popup__add-label" data-popup-add-label>Add to cart</span>
+            </button>
+
+            <p class="gift-popup__error" data-popup-error role="alert" hidden></p>
+          </form>
+
+          <a class="gift-popup__link" data-popup-link href="#">View full details</a>
+        </div>
+      </div>
+    </dialog>
+  {%- endif -%}
+</div>
+
+<script src="{{ 'product-grid.js' | asset_url }}" type="module"></script>
+
+{% stylesheet %}
+  .gift-grid {
+    background-color: var(--grid-bg);
+    color: var(--grid-text);
+    padding-block: var(--grid-padding-block-start) var(--grid-padding-block-end);
+  }
+
+  .gift-grid__inner {
+    max-width: 1200px;
+    margin-inline: auto;
+    padding-inline: 24px;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Header                                                             */
+  /* ------------------------------------------------------------------ */
+  .gift-grid__header {
+    margin-block-end: 40px;
+  }
+
+  .gift-grid--align-center .gift-grid__header {
+    text-align: center;
+  }
+
+  .gift-grid__heading {
+    margin: 0 0 10px;
+    font-family: var(--font-heading--family);
+    font-size: clamp(1.9rem, 3.4vw, 2.9rem);
+    font-weight: 400;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+  }
+
+  .gift-grid__subheading {
+    margin: 0;
+    max-width: 52ch;
+    font-size: 1rem;
+    line-height: 1.6;
+    opacity: 0.75;
+  }
+
+  .gift-grid--align-center .gift-grid__subheading {
+    margin-inline: auto;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Cards                                                              */
+  /* ------------------------------------------------------------------ */
+  .gift-grid__cards {
+    display: grid;
+    grid-template-columns: repeat(var(--grid-cols), 1fr);
+    gap: var(--grid-gap);
+  }
+
+  .gift-grid__card {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .gift-grid__media {
+    position: relative;
+    aspect-ratio: var(--grid-image-ratio);
+    overflow: hidden;
+    background-color: rgb(0 0 0 / 0.06);
+    border-radius: 4px;
+  }
+
+  .gift-grid__image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .gift-grid__image--placeholder {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .gift-grid__card:hover .gift-grid__image {
+    transform: scale(1.05);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* "+" hotspot button                                                 */
+  /* ------------------------------------------------------------------ */
+  .gift-grid__hotspot {
+    position: absolute;
+    z-index: 2;
+    width: var(--grid-hotspot-size);
+    height: var(--grid-hotspot-size);
+    border-radius: 50%;
+    border: 2px solid var(--grid-text);
+    background-color: var(--grid-accent);
+    color: #121212;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: calc(var(--grid-hotspot-size) * 0.5);
+    font-weight: 400;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    box-shadow: 0 4px 14px rgb(0 0 0 / 0.25);
+  }
+
+  .gift-grid__hotspot--top-right { top: 16px; right: 16px; }
+  .gift-grid__hotspot--top-left { top: 16px; left: 16px; }
+  .gift-grid__hotspot--bottom-right { bottom: 16px; right: 16px; }
+  .gift-grid__hotspot--bottom-left { bottom: 16px; left: 16px; }
+
+  .gift-grid__hotspot-icon {
+    display: inline-flex;
+    transform: translateY(-1px);
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .gift-grid__hotspot:hover,
+  .gift-grid__hotspot:focus-visible {
+    transform: scale(1.12) rotate(90deg);
+  }
+
+  .gift-grid__hotspot:hover .gift-grid__hotspot-icon {
+    transform: translateY(-1px) rotate(-90deg) scale(1.1);
+  }
+
+  .gift-grid__hotspot-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 1px solid var(--grid-accent);
+    animation: gift-grid-hotspot-pulse 2.4s ease-out infinite;
+    pointer-events: none;
+  }
+
+  @keyframes gift-grid-hotspot-pulse {
+    0% {
+      transform: scale(1);
+      opacity: 0.8;
+    }
+    75% {
+      transform: scale(1.55);
+      opacity: 0;
+    }
+    100% {
+      transform: scale(1.55);
+      opacity: 0;
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Card info                                                          */
+  /* ------------------------------------------------------------------ */
+  .gift-grid__info {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding-block-start: 14px;
+  }
+
+  .gift-grid--align-center .gift-grid__info {
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    text-align: center;
+  }
+
+  .gift-grid__title {
+    margin: 0;
+    font-family: var(--font-body--family);
+    font-size: 1rem;
+    font-weight: 500;
+    line-height: 1.35;
+  }
+
+  .gift-grid__price {
+    font-family: var(--font-body--family);
+    font-size: 0.95rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .gift-grid__empty {
+    text-align: center;
+    opacity: 0.6;
+    padding: 40px 0;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Quick-view popup                                                   */
+  /* ------------------------------------------------------------------ */
+  .gift-popup {
+    border: none;
+    padding: 0;
+    background: transparent;
+    max-width: none;
+    width: 100%;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .gift-popup[open] {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .gift-popup::backdrop {
+    background: rgb(0 0 0 / 0.6);
+    backdrop-filter: blur(2px);
+  }
+
+  .gift-popup__card {
+    position: relative;
+    width: min(880px, calc(100vw - 32px));
+    max-height: min(88vh, 760px);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    background-color: #fff;
+    color: #121212;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 30px 80px rgb(0 0 0 / 0.4);
+    animation: gift-popup-enter 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  @keyframes gift-popup-enter {
+    from {
+      opacity: 0;
+      transform: translateY(24px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .gift-popup__close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    z-index: 3;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid rgb(18 18 18 / 0.15);
+    background-color: rgb(255 255 255 / 0.9);
+    color: #121212;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.2s ease;
+  }
+
+  .gift-popup__close:hover {
+    background-color: #121212;
+    color: #fff;
+    transform: rotate(90deg);
+  }
+
+  .gift-popup__media {
+    position: relative;
+    min-height: 260px;
+    background-color: #f2f0ea;
+  }
+
+  .gift-popup__image {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+  }
+
+  .gift-popup__details {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 40px 36px;
+    overflow-y: auto;
+  }
+
+  .gift-popup__title {
+    margin: 0;
+    font-family: var(--font-heading--family);
+    font-size: clamp(1.4rem, 2.4vw, 1.9rem);
+    font-weight: 400;
+    line-height: 1.15;
+  }
+
+  .gift-popup__title a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .gift-popup__title a:hover {
+    text-decoration: underline;
+  }
+
+  .gift-popup__price {
+    font-size: 1.15rem;
+    font-weight: 600;
+  }
+
+  .gift-popup__price .gift-popup__compare {
+    margin-inline-start: 8px;
+    font-size: 0.9rem;
+    font-weight: 400;
+    opacity: 0.55;
+    text-decoration: line-through;
+  }
+
+  .gift-popup__description {
+    font-size: 0.95rem;
+    line-height: 1.55;
+    opacity: 0.8;
+    max-height: 140px;
+    overflow-y: auto;
+  }
+
+  .gift-popup__form {
+    margin-block-start: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  /* Option groups (Size / Color pills) */
+  .gift-popup__options {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .gift-popup__option {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .gift-popup__option-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    opacity: 0.6;
+  }
+
+  .gift-popup__option-values {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .gift-popup__pill {
+    position: relative;
+  }
+
+  .gift-popup__pill input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .gift-popup__pill span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    padding: 8px 16px;
+    border: 1px solid rgb(18 18 18 / 0.25);
+    border-radius: 999px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+  }
+
+  .gift-popup__pill input:checked + span {
+    border-color: #121212;
+    background-color: #121212;
+    color: #fff;
+  }
+
+  .gift-popup__pill input:focus-visible + span {
+    outline: 2px solid #121212;
+    outline-offset: 2px;
+  }
+
+  .gift-popup__pill span.is-unavailable {
+    opacity: 0.4;
+    text-decoration: line-through;
+    cursor: not-allowed;
+  }
+
+  /* Add to cart button (animated) */
+  .gift-popup__add {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 16px 24px;
+    border: none;
+    border-radius: 999px;
+    background-color: #f0b800;
+    color: #121212;
+    font-family: var(--font-body--family);
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+  }
+
+  .gift-popup__add:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px rgb(240 184 0 / 0.45);
+  }
+
+  .gift-popup__add:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .gift-popup__add::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -60%;
+    width: 40%;
+    height: 100%;
+    background: linear-gradient(100deg, transparent, rgb(255 255 255 / 0.55), transparent);
+    transform: skewX(-20deg);
+    transition: left 0.6s ease;
+  }
+
+  .gift-popup__add:hover:not(:disabled)::after {
+    left: 120%;
+  }
+
+  .gift-popup__add.is-adding {
+    pointer-events: none;
+  }
+
+  .gift-popup__add.is-adding .gift-popup__add-label::after {
+    content: '';
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    margin-inline-start: 10px;
+    vertical-align: -1px;
+    border: 2px solid rgb(18 18 18 / 0.35);
+    border-top-color: #121212;
+    border-radius: 50%;
+    animation: gift-popup-spin 0.7s linear infinite;
+  }
+
+  .gift-popup__add.is-added {
+    background-color: #121212;
+    color: #fff;
+  }
+
+  @keyframes gift-popup-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .gift-popup__error {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #b3261e;
+  }
+
+  .gift-popup__link {
+    align-self: flex-start;
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Mobile                                                             */
+  /* ------------------------------------------------------------------ */
+  @media screen and (max-width: 749px) {
+    .gift-grid__inner {
+      padding-inline: 20px;
+    }
+
+    .gift-grid__cards {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+
+    .gift-grid__header {
+      margin-block-end: 28px;
+    }
+
+    .gift-grid__title {
+      font-size: 0.9rem;
+    }
+
+    .gift-grid__price {
+      font-size: 0.85rem;
+    }
+
+    .gift-popup__card {
+      grid-template-columns: 1fr;
+      max-height: min(92vh, 780px);
+    }
+
+    .gift-popup__media {
+      min-height: 0;
+      aspect-ratio: 4 / 3;
+    }
+
+    .gift-popup__details {
+      padding: 28px 20px 24px;
+      gap: 12px;
+    }
+
+    .gift-popup__description {
+      max-height: 110px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .gift-grid__hotspot-ring,
+    .gift-popup__card,
+    .gift-grid__image {
+      animation: none;
+      transition: none;
+    }
+
+    .gift-grid__card:hover .gift-grid__image {
+      transform: none;
+    }
+  }
+{% endstylesheet %}
+
+{% schema %}
+{
+  "name": "Product Grid",
+  "tag": "section",
+  "class": "gift-grid-wrapper section-wrapper",
+  "disabled_on": {
+    "groups": ["header", "footer"]
+  },
+  "max_blocks": 6,
+  "blocks": [
+    {
+      "type": "product",
+      "name": "Product",
+      "settings": [
+        {
+          "type": "product",
+          "id": "product",
+          "label": "Product"
+        },
+        {
+          "type": "image_picker",
+          "id": "image",
+          "label": "Image",
+          "info": "Optional. Overrides the product's own image."
+        },
+        {
+          "type": "select",
+          "id": "hotspot_position",
+          "label": "Hotspot position",
+          "options": [
+            {
+              "value": "bottom-right",
+              "label": "Bottom right"
+            },
+            {
+              "value": "bottom-left",
+              "label": "Bottom left"
+            },
+            {
+              "value": "top-right",
+              "label": "Top right"
+            },
+            {
+              "value": "top-left",
+              "label": "Top left"
+            }
+          ],
+          "default": "bottom-right"
+        }
+      ]
+    }
+  ],
+  "settings": [
+    {
+      "type": "header",
+      "content": "Text"
+    },
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Tisso vison in the wild"
+    },
+    {
+      "type": "textarea",
+      "id": "subheading",
+      "label": "Subheading",
+      "default": "Shop the look with pieces our community has been loving this season."
+    },
+    {
+      "type": "select",
+      "id": "text_alignment",
+      "label": "Text alignment",
+      "options": [
+        {
+          "value": "left",
+          "label": "Left"
+        },
+        {
+          "value": "center",
+          "label": "Center"
+        }
+      ],
+      "default": "left"
+    },
+    {
+      "type": "header",
+      "content": "Layout"
+    },
+    {
+      "type": "range",
+      "id": "columns",
+      "label": "Columns (desktop)",
+      "min": 2,
+      "max": 4,
+      "step": 1,
+      "default": 3
+    },
+    {
+      "type": "range",
+      "id": "columns_gap",
+      "label": "Gap between cards",
+      "min": 4,
+      "max": 60,
+      "step": 4,
+      "unit": "px",
+      "default": 28
+    },
+    {
+      "type": "select",
+      "id": "image_ratio",
+      "label": "Image ratio",
+      "options": [
+        {
+          "value": "3 / 4",
+          "label": "Portrait (3:4)"
+        },
+        {
+          "value": "1 / 1",
+          "label": "Square (1:1)"
+        },
+        {
+          "value": "4 / 3",
+          "label": "Landscape (4:3)"
+        }
+      ],
+      "default": "3 / 4"
+    },
+    {
+      "type": "header",
+      "content": "Hotspot & popup"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_popup",
+      "label": "Enable quick-view popup",
+      "default": true,
+      "info": "Clicking a \"+\" hotspot opens the product quick view with dynamic variants and Add to cart."
+    },
+    {
+      "type": "color",
+      "id": "hotspot_color",
+      "label": "Hotspot color",
+      "default": "#f0b800"
+    },
+    {
+      "type": "range",
+      "id": "hotspot_size",
+      "label": "Hotspot size",
+      "min": 28,
+      "max": 64,
+      "step": 2,
+      "unit": "px",
+      "default": 44
+    },
+    {
+      "type": "header",
+      "content": "Free gift rule",
+      "info": "When a product with the trigger Color and Size below is added to the cart, the selected free gift is added automatically."
+    },
+    {
+      "type": "product",
+      "id": "free_gift_product",
+      "label": "Free gift product",
+      "info": "Default: Soft Winter Jacket."
+    },
+    {
+      "type": "text",
+      "id": "free_gift_color",
+      "label": "Trigger color option",
+      "default": "Black"
+    },
+    {
+      "type": "text",
+      "id": "free_gift_size",
+      "label": "Trigger size option",
+      "default": "M",
+      "info": "\"M\" and \"Medium\" are treated as the same value."
+    },
+    {
+      "type": "header",
+      "content": "Style"
+    },
+    {
+      "type": "color",
+      "id": "background_color",
+      "label": "Background color",
+      "default": "#faf7f0"
+    },
+    {
+      "type": "color",
+      "id": "text_color",
+      "label": "Text color",
+      "default": "#121212"
+    },
+    {
+      "type": "header",
+      "content": "Spacing"
+    },
+    {
+      "type": "range",
+      "id": "padding_block_start",
+      "label": "Top padding",
+      "min": 0,
+      "max": 120,
+      "step": 4,
+      "unit": "px",
+      "default": 64
+    },
+    {
+      "type": "range",
+      "id": "padding_block_end",
+      "label": "Bottom padding",
+      "min": 0,
+      "max": 120,
+      "step": 4,
+      "unit": "px",
+      "default": 72
+    }
+  ],
+  "presets": [
+    {
+      "name": "Product Grid",
+      "category": "Product grid",
+      "blocks": [
+        {
+          "type": "product",
+          "settings": {
+            "product": "yellow-wool-jumper"
+          }
+        },
+        {
+          "type": "product",
+          "settings": {
+            "product": "classic-leather-jacket"
+          }
+        },
+        {
+          "type": "product",
+          "settings": {
+            "product": "dark-winter-jacket"
+          }
+        },
+        {
+          "type": "product",
+          "settings": {
+            "product": "ocean-blue-shirt"
+          }
+        },
+        {
+          "type": "product",
+          "settings": {
+            "product": "red-sports-tee"
+          }
+        },
+        {
+          "type": "product",
+          "settings": {
+            "product": "striped-silk-blouse"
+          }
+        }
+      ]
+    }
+  ]
+}
+{% endschema %}
