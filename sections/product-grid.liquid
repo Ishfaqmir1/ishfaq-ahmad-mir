@@ -73,6 +73,7 @@
           {%- liquid
             assign product = block.settings.product
             assign product_image = block.settings.image | default: product.featured_image
+            assign alt_text = product_image.alt | default: product.title | escape
           -%}
 
           <div class="gift-grid__card" data-product-card>
@@ -85,7 +86,7 @@
                     width: product_image.width,
                     widths: '360, 540, 720, 900, 1080, 1200',
                     sizes: '(min-width: 990px) 33vw, (min-width: 750px) 50vw, 50vw',
-                    alt: product_image.alt | default: product.title | escape,
+                    alt: alt_text,
                     loading: 'lazy',
                     class: 'gift-grid__image'
                 }}
