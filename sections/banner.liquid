@@ -25,7 +25,13 @@
   assign button_label = section.settings.button_label
   assign button_link = section.settings.button_link
   assign footer_text = section.settings.footer_text
-  assign has_media = section.settings.image != blank
+  assign banner_alt = section.settings.image.alt | escape
+
+  # Whether a background image has been uploaded
+  assign has_media = false
+  if section.settings.image != blank
+    assign has_media = true
+  endif
 
   # Font stack helpers (map the customizer select to a CSS variable)
   case section.settings.heading_font
@@ -75,7 +81,7 @@
           width: section.settings.image.width,
           widths: '750, 1100, 1500, 1780, 2000, 2400',
           sizes: '100vw',
-          alt: section.settings.image.alt | escape,
+          alt: banner_alt,
           class: 'gift-banner__image',
           fetchpriority: fetch_priority
       }}
